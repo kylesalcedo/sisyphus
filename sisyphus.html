@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sisyphus</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0a;
+  --fg: #e8e8e8;
+  --dim: #666;
+  --faint: #333;
+  --border: #1a1a1a;
+  --accent: #999;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 17px;
+  user-select: none;
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+#game {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  grid-template-rows: 1fr;
+  width: 100%; height: 100vh;
+}
+
+/* LEFT PANEL */
+#left-panel {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tab {
+  flex: 1;
+  padding: 12px 4px;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--accent); }
+.tab.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+.upgrade-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.upgrade-card {
+  padding: 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+  position: relative;
+}
+.upgrade-card:hover:not(.maxed):not(.locked) {
+  border-color: #555;
+  background: rgba(255,255,255,0.02);
+}
+.upgrade-card.affordable { border-color: #555; }
+.upgrade-card.locked { cursor: default; }
+.upgrade-card.maxed { opacity: 0.5; cursor: default; }
+
+.upgrade-card.hidden-upgrade .upgrade-name,
+.upgrade-card.hidden-upgrade .upgrade-flavor,
+.upgrade-card.hidden-upgrade .upgrade-effect {
+  filter: blur(5px);
+  pointer-events: none;
+}
+.upgrade-card.hidden-upgrade::after {
+  content: '???';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  color: var(--dim);
+  letter-spacing: 3px;
+}
+
+.upgrade-name {
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 3px;
+}
+.upgrade-card.maxed .upgrade-name::after {
+  content: ' MAX';
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.upgrade-flavor {
+  font-style: italic;
+  font-size: 14px;
+  color: var(--dim);
+  margin-bottom: 5px;
+}
+.upgrade-effect {
+  font-size: 14px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.upgrade-cost {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  color: var(--dim);
+}
+.upgrade-cost.can-afford { color: var(--fg); }
+.upgrade-count {
+  position: absolute;
+  top: 10px; right: 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* CENTER */
+#center {
+  position: relative;
+  overflow: hidden;
+}
+
+#scene-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+}
+
+#stats {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+.total-meters {
+  font-family: 'Cinzel', serif;
+  font-size: 42px;
+  font-weight: 900;
+  color: var(--fg);
+  letter-spacing: 2px;
+}
+.total-label {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 2px;
+}
+.sub-stats {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.sub-stat { text-align: center; }
+.sub-stat-val {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  color: var(--accent);
+}
+.sub-stat-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.click-float {
+  position: absolute;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  color: var(--fg);
+  pointer-events: none;
+  z-index: 20;
+  animation: floatUp 0.8s ease-out forwards;
+  opacity: 0.9;
+}
+@keyframes floatUp {
+  0% { opacity: 0.9; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.6); }
+}
+
+/* RIGHT PANEL */
+#right-panel {
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+#habits-section {
+  flex: 0 0 auto;
+  overflow-y: auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#prestige-section {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  display: none;
+  flex-shrink: 0;
+}
+#prestige-section.show { display: block; }
+#prestige-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--fg);
+  background: none;
+  border: 1px solid var(--faint);
+  padding: 10px 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 6px;
+  transition: all 0.15s;
+}
+#prestige-btn:hover:not(:disabled) { border-color: var(--dim); }
+#prestige-btn:disabled { opacity: 0.3; cursor: default; }
+.prestige-desc {
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+.prestige-info { font-size: 13px; color: var(--dim); }
+.prestige-req {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  color: var(--faint);
+  margin-top: 4px;
+}
+
+#milestones-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.milestone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 3px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.milestone.unlocked { color: var(--fg); }
+.milestone.locked { color: var(--faint); }
+.milestone.locked.hidden-milestone .milestone-name { filter: blur(4px); }
+.milestone-icon { font-size: 20px; width: 28px; text-align: center; }
+.milestone-name { font-family: 'Cinzel', serif; font-size: 14px; }
+.milestone-desc { font-size: 13px; color: var(--dim); }
+
+#habits-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.habit-row.active {
+  border-color: #444;
+  background: rgba(255,255,255,0.02);
+}
+.habit-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+.habit-info { flex: 1; min-width: 0; }
+.habit-name-input {
+  background: none; border: none;
+  font-family: 'Cinzel', serif;
+  font-size: 15px; font-weight: 600;
+  color: var(--fg);
+  width: 100%;
+  outline: none;
+}
+.habit-name-input:focus { border-bottom: 1px solid var(--dim); }
+.habit-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 12px; color: var(--dim);
+  margin-top: 3px;
+}
+.habit-streak { color: var(--accent); }
+.habit-done-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  border-radius: 3px;
+  border: 1px solid var(--faint);
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+  transition: all 0.12s;
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: center;
+}
+.habit-done-btn:hover:not(:disabled) { border-color: var(--dim); }
+.habit-done-btn:disabled { opacity: 0.3; cursor: default; color: var(--dim); }
+
+/* TOASTS */
+#toast-container {
+  position: fixed;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.toast {
+  background: #151515;
+  border: 1px solid #444;
+  border-radius: 5px;
+  padding: 12px 24px;
+  font-size: 14px;
+  color: var(--fg);
+  animation: toastIn 0.25s ease-out, toastOut 0.4s ease-in 2.5s forwards;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 20px rgba(255,255,255,0.06);
+}
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 300;
+}
+.modal {
+  background: #111;
+  border: 1px solid var(--faint);
+  border-radius: 6px;
+  padding: 30px;
+  max-width: 380px;
+  text-align: center;
+}
+.modal h2 {
+  font-family: 'Cinzel', serif;
+  color: var(--fg);
+  font-size: 18px;
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+.modal p {
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.modal-buttons { display: flex; gap: 10px; justify-content: center; }
+.modal-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1px;
+  padding: 8px 20px;
+  border-radius: 3px;
+  border: 1px solid var(--faint);
+  cursor: pointer;
+  background: none;
+  color: var(--fg);
+  transition: all 0.12s;
+}
+.modal-btn:hover { border-color: var(--dim); }
+.modal-btn.cancel { color: var(--dim); }
+
+#settings-btn {
+  position: fixed;
+  bottom: 12px; right: 12px;
+  background: none; border: none;
+  color: var(--faint);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 100;
+}
+#settings-btn:hover { color: var(--dim); }
+
+#settings-panel {
+  display: none;
+  position: fixed;
+  bottom: 40px; right: 12px;
+  background: #111;
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  padding: 14px;
+  z-index: 100;
+  min-width: 180px;
+}
+#settings-panel.open { display: block; }
+#settings-panel label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; margin-bottom: 6px; cursor: pointer;
+  color: var(--dim);
+}
+#settings-panel input[type="checkbox"] { accent-color: var(--accent); }
+.settings-divider { border-top: 1px solid var(--border); margin: 8px 0; }
+#reset-save-btn {
+  background: none;
+  border: 1px solid #333;
+  color: #666;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Crimson Text', serif;
+  font-size: 12px;
+  width: 100%;
+}
+#reset-save-btn:hover { color: #999; border-color: #555; }
+
+#dev-indicator {
+  position: fixed;
+  top: 8px; right: 12px;
+  font-family: monospace;
+  font-size: 10px;
+  color: #333;
+  z-index: 100;
+  display: none;
+}
+#dev-indicator.show { display: block; color: #555; }
+
+#fps-display {
+  position: fixed;
+  bottom: 12px; left: 12px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #444;
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width: 900px) {
+  #game { grid-template-columns: 1fr; }
+  #left-panel, #right-panel { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="left-panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="strength">Strength</button>
+      <button class="tab" data-tab="helpers">Helpers</button>
+      <button class="tab" data-tab="blessings">Blessings</button>
+    </div>
+    <div class="upgrade-list" id="upgrade-list"></div>
+  </div>
+
+  <div id="center">
+    <canvas id="scene-canvas"></canvas>
+    <div id="stats">
+      <div class="total-meters" id="stat-total">0</div>
+      <div class="total-label">meters</div>
+      <div class="sub-stats">
+        <div class="sub-stat">
+          <div class="sub-stat-val" id="stat-mps">0</div>
+          <div class="sub-stat-label">per sec</div>
+        </div>
+        <div class="sub-stat">
+          <div class="sub-stat-val" id="stat-mpc">1</div>
+          <div class="sub-stat-label">per click</div>
+        </div>
+        <div class="sub-stat">
+          <div class="sub-stat-val" id="stat-fate">1.0x</div>
+          <div class="sub-stat-label">fate</div>
+        </div>
+        <div class="sub-stat">
+          <div class="sub-stat-val" id="stat-lifetime">0</div>
+          <div class="sub-stat-label">lifetime</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div class="section-title">Daily Rites</div>
+    <div style="color:#777; font-size:13px; font-style:italic; padding:4px 14px 8px; font-family:'Crimson Text',serif; text-align:center;">One for the spirit, one for the mind, one for the body</div>
+    <div id="habits-section"></div>
+    <div id="prestige-section">
+      <button id="prestige-btn" disabled>Let the Boulder Fall</button>
+      <div class="prestige-desc">Reset upgrades. Gain a permanent +25% multiplier.</div>
+      <div class="prestige-info">
+        Prestiges: <span id="prestige-count">0</span> &middot; Fate: <span id="fate-mult">1.00x</span>
+      </div>
+      <div class="prestige-req" id="prestige-req"></div>
+    </div>
+    <div class="section-title">Milestones</div>
+    <div id="milestones-list"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<button id="settings-btn" title="Settings">&#9881;</button>
+<div id="settings-panel">
+  <label><input type="checkbox" id="fps-toggle"> Show FPS</label>
+  <div class="settings-divider"></div>
+  <button id="reset-save-btn">Reset Save</button>
+</div>
+<div id="dev-indicator">DEV</div>
+<div id="fps-display"></div>
+
+<script>
+// ============================================
+// STATE
+// ============================================
+const DEFAULT_STATE = () => ({
+  meters: 0,
+  totalMeters: 0,
+  prestigeCount: 0,
+  fatePoints: 0,
+  upgrades: {},
+  habits: [
+    { name: 'Meditation', icon: '\u{1F9D8}', freq: 'daily', lastDone: 0, streak: 0, lastStreakDay: '' },
+    { name: 'Reading', icon: '\u{1F9E0}', freq: 'daily', lastDone: 0, streak: 0, lastStreakDay: '' },
+    { name: 'Movement', icon: '\u{1F3C3}', freq: 'daily', lastDone: 0, streak: 0, lastStreakDay: '' }
+  ],
+  achievements: {},
+  settings: { fps: false },
+  lastSave: Date.now(),
+  lastOnline: Date.now(),
+  firstPrestigeDone: false
+});
+
+let gs = DEFAULT_STATE();
+let devMode = false;
+let devSequence = [];
+const DEV_CODE = ['ArrowLeft','ArrowRight','ArrowLeft','ArrowRight'];
+
+// ============================================
+// UPGRADES
+// ============================================
+const UPGRADES = {
+  strength: [
+    { id: 'calloused', name: 'Calloused Hands', flavor: 'Pain is the sculptor of will.', effect: '+1 m/click', type: 'addClick', value: 1, baseCost: 10, costMult: 1.15, max: Infinity },
+    { id: 'irongrip', name: 'Iron Grip', flavor: 'What breaks lesser men, he holds.', effect: '+3 m/click', type: 'addClick', value: 3, baseCost: 75, costMult: 1.18, max: Infinity },
+    { id: 'titan', name: "Titan's Resolve", flavor: 'Born of earth. Unbreakable.', effect: '\u00d72 m/click', type: 'multClick', value: 2, baseCost: 500, costMult: 3, max: Infinity },
+    { id: 'herculean', name: 'Herculean Force', flavor: 'The blood of gods runs through stone.', effect: '+10 m/click', type: 'addClick', value: 10, baseCost: 2000, costMult: 1.2, max: Infinity },
+    { id: 'olympian_str', name: 'Olympian Strength', flavor: 'Even Olympus trembles.', effect: '\u00d73 m/click', type: 'multClick', value: 3, baseCost: 15000, costMult: 4, max: Infinity },
+    { id: 'mastery', name: 'The Sisyphean Mastery', flavor: 'He who pushes forever knows strength without end.', effect: '\u00d75 m/click', type: 'multClick', value: 5, baseCost: 100000, costMult: 5, max: Infinity },
+    { id: 'atlas_grip', name: "Atlas' Grip", flavor: 'He held the sky. You hold the stone.', effect: '+50 m/click', type: 'addClick', value: 50, baseCost: 500000, costMult: 1.22, max: Infinity },
+    { id: 'world_shatter', name: 'World Shatterer', flavor: 'Each push cracks the earth beneath.', effect: '\u00d710 m/click', type: 'multClick', value: 10, baseCost: 5000000, costMult: 6, max: Infinity },
+    { id: 'cosmic_force', name: 'Cosmic Force', flavor: 'The stars themselves recoil.', effect: '+500 m/click', type: 'addClick', value: 500, baseCost: 50000000, costMult: 1.25, max: Infinity },
+  ],
+  helpers: [
+    { id: 'shade', name: 'A Passing Shade', flavor: 'Even the dead pity him.', effect: '+0.5 m/s', type: 'addAuto', value: 0.5, baseCost: 50, costMult: 1.12, max: Infinity },
+    { id: 'danaids', name: 'The Danaids Assist', flavor: 'Futility recognizes futility.', effect: '+2 m/s', type: 'addAuto', value: 2, baseCost: 300, costMult: 1.15, max: Infinity },
+    { id: 'tantalus', name: 'Tantalus Pushes', flavor: 'He reaches, and finally grasps something real.', effect: '+8 m/s', type: 'addAuto', value: 8, baseCost: 2000, costMult: 1.18, max: Infinity },
+    { id: 'hermes', name: "Hermes' Blessing", flavor: 'Swift feet lend their grace.', effect: '+25 m/s', type: 'addAuto', value: 25, baseCost: 12000, costMult: 1.2, max: Infinity },
+    { id: 'fates', name: 'The Fates Intervene', flavor: 'Even destiny bends for the relentless.', effect: '+100 m/s', type: 'addAuto', value: 100, baseCost: 75000, costMult: 1.22, max: Infinity },
+    { id: 'prometheus', name: 'Prometheus Unchained', flavor: 'Fire-bringer. Chain-breaker. Boulder-pusher.', effect: '+500 m/s', type: 'addAuto', value: 500, baseCost: 500000, costMult: 1.25, max: Infinity },
+    { id: 'divine_mom', name: 'Divine Momentum', flavor: 'The universe itself pushes with him.', effect: '\u00d72 all auto', type: 'multAuto', value: 2, baseCost: 2000000, costMult: 5, max: Infinity },
+    { id: 'chronos', name: 'Chronos Winds', flavor: 'Time itself pushes the stone forward.', effect: '+2,000 m/s', type: 'addAuto', value: 2000, baseCost: 10000000, costMult: 1.28, max: Infinity },
+    { id: 'titan_army', name: 'Titan Workforce', flavor: 'A hundred condemned souls, pushing as one.', effect: '+10,000 m/s', type: 'addAuto', value: 10000, baseCost: 100000000, costMult: 1.3, max: Infinity },
+    { id: 'cosmic_engine', name: 'Cosmic Engine', flavor: 'The machinery of the universe, harnessed.', effect: '\u00d75 all auto', type: 'multAuto', value: 5, baseCost: 1000000000, costMult: 8, max: Infinity },
+  ],
+  blessings: [
+    { id: 'stoic', name: 'Stoic Acceptance', flavor: 'One must imagine Sisyphus content.', effect: '\u00d71.5 all', type: 'multAll', value: 1.5, baseCost: 1000, costMult: 1, max: 1 },
+    { id: 'eternal', name: 'Eternal Purpose', flavor: 'The struggle itself is enough to fill a heart.', effect: '\u00d72 all', type: 'multAll', value: 2, baseCost: 10000, costMult: 1, max: 1 },
+    { id: 'olympian_fav', name: 'Olympian Favor', flavor: 'The gods watch, and for once, they do not laugh.', effect: '\u00d73 all', type: 'multAll', value: 3, baseCost: 100000, costMult: 1, max: 1 },
+    { id: 'absurd', name: 'The Absurd Triumph', flavor: 'In the absence of meaning, he creates his own.', effect: '\u00d75 all', type: 'multAll', value: 5, baseCost: 1000000, costMult: 1, max: 1 },
+    { id: 'fate_weaver', name: "Fate's Weave", flavor: 'The threads of destiny knot around his fists.', effect: '\u00d78 all', type: 'multAll', value: 8, baseCost: 25000000, costMult: 1, max: 1 },
+    { id: 'void_will', name: 'Will of the Void', flavor: 'Beyond the gods. Beyond meaning. Pure will.', effect: '\u00d710 all', type: 'multAll', value: 10, baseCost: 500000000, costMult: 1, max: 1 },
+    { id: 'eternal_engine', name: 'The Eternal Engine', flavor: 'He becomes the mountain. The mountain becomes him.', effect: '\u00d720 all', type: 'multAll', value: 20, baseCost: 50000000000, costMult: 1, max: 1 },
+    { id: 'omega', name: 'Omega', flavor: 'There is nothing beyond this.', effect: '\u00d7100 all', type: 'multAll', value: 100, baseCost: 1e15, costMult: 1, max: 1 },
+  ]
+};
+
+const ACHIEVEMENTS = [
+  { id: 'first100', name: 'First Steps', desc: 'Push 100 meters', icon: '\u25A0', check: gs => gs.totalMeters >= 100 },
+  { id: 'first1k', name: 'The Kilometer', desc: 'Push 1,000 meters', icon: '\u25B2', check: gs => gs.totalMeters >= 1000 },
+  { id: 'first10k', name: 'Into the Clouds', desc: 'Push 10km', icon: '\u25C6', check: gs => gs.totalMeters >= 10000 },
+  { id: 'first100k', name: 'Above the World', desc: 'Push 100km', icon: '\u25CB', check: gs => gs.totalMeters >= 100000 },
+  { id: 'first1m', name: 'The Absurdist', desc: 'Push 1M meters', icon: '\u2605', check: gs => gs.totalMeters >= 1000000 },
+  { id: 'prest1', name: 'The Fall', desc: 'Prestige once', icon: '\u21BB', check: gs => gs.prestigeCount >= 1 },
+  { id: 'prest5', name: 'Eternal Return', desc: 'Prestige 5 times', icon: '\u221E', check: gs => gs.prestigeCount >= 5 },
+  { id: 'streak3', name: 'Forming the Path', desc: '3-day habit streak', icon: '\u25B3', check: gs => gs.habits.some(h => h.streak >= 3) },
+  { id: 'streak7', name: 'Unbreakable', desc: '7-day habit streak', icon: '\u2660', check: gs => gs.habits.some(h => h.streak >= 7) },
+  { id: 'streak14', name: 'Ritual', desc: '14-day habit streak', icon: '\u2666', check: gs => gs.habits.some(h => h.streak >= 14) },
+  { id: 'streak30', name: 'Devotion', desc: '30-day habit streak', icon: '\u2726', check: gs => gs.habits.some(h => h.streak >= 30) },
+  { id: 'streak60', name: 'Eternal Discipline', desc: '60-day habit streak', icon: '\u2727', check: gs => gs.habits.some(h => h.streak >= 60) },
+];
+
+// ============================================
+// CALCULATIONS
+// ============================================
+function getCount(id) { return gs.upgrades[id] || 0; }
+
+function getClickPower() {
+  let add = 1, mult = 1;
+  for (const u of UPGRADES.strength) {
+    const c = getCount(u.id);
+    if (c > 0) {
+      if (u.type === 'addClick') add += u.value * c;
+      if (u.type === 'multClick') mult *= Math.pow(u.value, c);
+    }
+  }
+  return add * mult * getAllMult();
+}
+
+function getAutoRate() {
+  let add = 0, mult = 1;
+  for (const u of UPGRADES.helpers) {
+    const c = getCount(u.id);
+    if (c > 0) {
+      if (u.type === 'addAuto') add += u.value * c;
+      if (u.type === 'multAuto') mult *= Math.pow(u.value, c);
+    }
+  }
+  return add * mult * getAllMult();
+}
+
+function getAllMult() {
+  let m = 1;
+  for (const u of UPGRADES.blessings) {
+    const c = getCount(u.id);
+    if (c > 0) m *= Math.pow(u.value, c);
+  }
+  m *= 1 + gs.fatePoints * 0.25;
+  m *= getHabitMult();
+  return m;
+}
+
+function getHabitMult() {
+  let m = 1;
+  const now = Date.now();
+  for (const h of gs.habits) {
+    if (h.lastDone && (now - h.lastDone) < 3600000) m += 0.5;
+    m += Math.min(h.streak * 0.05, 0.5);
+  }
+  return m;
+}
+
+function getCost(u) {
+  return Math.floor(u.baseCost * Math.pow(u.costMult, getCount(u.id)));
+}
+
+function isRevealed(u) {
+  if (devMode) return true;
+  if (getCount(u.id) > 0) return true;
+  return gs.totalMeters >= u.baseCost * 0.4;
+}
+
+function isMilestoneRevealed(a) {
+  if (devMode) return true;
+  if (gs.achievements[a.id]) return true;
+  const meterThresh = { first100: 100, first1k: 1000, first10k: 10000, first100k: 100000, first1m: 1000000 };
+  if (meterThresh[a.id]) return gs.totalMeters >= meterThresh[a.id] * 0.3;
+  if (a.id === 'prest1') return gs.totalMeters >= 30000 || gs.prestigeCount > 0;
+  if (a.id === 'prest5') return gs.prestigeCount >= 2;
+  const streakThresh = { streak3: 1, streak7: 3, streak14: 7, streak30: 14, streak60: 30 };
+  if (streakThresh[a.id]) return gs.habits.some(h => h.streak >= streakThresh[a.id]);
+  return false;
+}
+
+function fmt(n) {
+  if (n < 1000) return Math.floor(n).toLocaleString();
+  if (n < 1e6) return (n / 1e3).toFixed(1) + 'k';
+  if (n < 1e9) return (n / 1e6).toFixed(1) + 'M';
+  if (n < 1e12) return (n / 1e9).toFixed(1) + 'B';
+  return (n / 1e12).toFixed(1) + 'T';
+}
+
+// ============================================
+// ACTIONS
+// ============================================
+let sisStrain = 0;
+let boulderSpin = 0;
+let boulderPulse = 0;
+let lastClickTime = 0;
+let clickRings = [];
+
+function doClick(screenX, screenY) {
+  const power = getClickPower();
+  gs.meters += power;
+  gs.totalMeters += power;
+  sisStrain = 0.35;
+  boulderSpin += 0.12;
+  boulderPulse = 0.4;
+  lastClickTime = performance.now();
+  clickRings.push({ t: 1.0 });
+  // Floater
+  const area = document.getElementById('center');
+  const rect = area.getBoundingClientRect();
+  spawnFloater(screenX - rect.left, screenY - rect.top, power);
+}
+
+function buyUpgrade(cat, idx) {
+  const u = UPGRADES[cat][idx];
+  if (getCount(u.id) >= u.max) return;
+  const cost = getCost(u);
+  if (gs.meters < cost) return;
+  gs.meters -= cost;
+  gs.upgrades[u.id] = getCount(u.id) + 1;
+  renderUpgrades();
+}
+
+function getPrestigeCost() {
+  return 50000 * Math.pow(3, gs.prestigeCount);
+}
+
+function doPrestige() {
+  gs.fatePoints += 1;
+  gs.prestigeCount += 1;
+  gs.meters = 0;
+  gs.upgrades = {};
+  gs.firstPrestigeDone = true;
+  showToast(`Fate Point earned \u2014 ${(1 + gs.fatePoints * 0.25).toFixed(2)}x`);
+  renderAll();
+}
+
+// ============================================
+// SAVE / LOAD
+// ============================================
+function saveGame() {
+  gs.lastOnline = Date.now();
+  gs.lastSave = Date.now();
+  try { localStorage.setItem('sisyphus_save', JSON.stringify(gs)); } catch(e) {}
+  showToast('Saved \u2713');
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem('sisyphus_save');
+    if (raw) {
+      const data = JSON.parse(raw);
+      const def = DEFAULT_STATE();
+      gs = { ...def, ...data };
+      if (!gs.habits || gs.habits.length < 3) gs.habits = def.habits;
+      gs.habits = gs.habits.map((h, i) => ({ ...def.habits[i], ...h }));
+      const elapsed = (Date.now() - (gs.lastOnline || Date.now())) / 1000;
+      if (elapsed > 60) {
+        const capped = Math.min(elapsed, 8 * 3600);
+        const rate = getAutoRate();
+        if (rate > 0) {
+          const earned = rate * capped;
+          gs.meters += earned;
+          gs.totalMeters += earned;
+          setTimeout(() => showIdleModal(earned, capped), 300);
+        }
+      }
+    }
+  } catch(e) { gs = DEFAULT_STATE(); }
+}
+
+function resetSave() {
+  localStorage.removeItem('sisyphus_save');
+  gs = DEFAULT_STATE();
+  renderAll();
+  showToast('Save data cleared');
+}
+
+// ============================================
+// UI RENDERING
+// ============================================
+let currentTab = 'strength';
+
+function renderUpgrades() {
+  const list = document.getElementById('upgrade-list');
+  const upgrades = UPGRADES[currentTab];
+  list.innerHTML = '';
+  for (let i = 0; i < upgrades.length; i++) {
+    const u = upgrades[i];
+    const count = getCount(u.id);
+    const cost = getCost(u);
+    const maxed = count >= u.max;
+    const affordable = !maxed && gs.meters >= cost;
+    const revealed = isRevealed(u);
+
+    const card = document.createElement('div');
+    let cls = 'upgrade-card';
+    if (maxed) cls += ' maxed';
+    else if (!revealed) cls += ' hidden-upgrade locked';
+    else if (affordable) cls += ' affordable';
+    card.className = cls;
+    card.innerHTML = `
+      <div class="upgrade-name">${u.name}</div>
+      <div class="upgrade-flavor">${u.flavor}</div>
+      <div class="upgrade-effect">${u.effect}</div>
+      ${maxed ? '' : `<div class="upgrade-cost ${affordable ? 'can-afford' : ''}">${fmt(cost)}m</div>`}
+      ${count > 0 ? `<div class="upgrade-count">${u.max === 1 ? '' : 'x' + count}</div>` : ''}
+    `;
+    if (!maxed && revealed) card.addEventListener('click', () => buyUpgrade(currentTab, i));
+    list.appendChild(card);
+  }
+}
+
+function renderPrestige() {
+  const section = document.getElementById('prestige-section');
+  if (gs.totalMeters >= 10000 || gs.firstPrestigeDone) section.classList.add('show');
+  const cost = getPrestigeCost();
+  const canPrestige = gs.meters >= cost;
+  document.getElementById('prestige-btn').disabled = !canPrestige;
+  document.getElementById('prestige-count').textContent = gs.prestigeCount;
+  document.getElementById('fate-mult').textContent = (1 + gs.fatePoints * 0.25).toFixed(2) + 'x';
+  const reqEl = document.getElementById('prestige-req');
+  if (section.classList.contains('show')) {
+    if (canPrestige) {
+      reqEl.textContent = `Cost: ${fmt(cost)}m`;
+    } else {
+      reqEl.textContent = `Need ${fmt(cost - gs.meters)}m of ${fmt(cost)}m`;
+    }
+  }
+}
+
+function renderMilestones() {
+  const list = document.getElementById('milestones-list');
+  list.innerHTML = '';
+  for (const a of ACHIEVEMENTS) {
+    const unlocked = gs.achievements[a.id];
+    const revealed = isMilestoneRevealed(a);
+    if (!revealed && !devMode) continue;
+    const div = document.createElement('div');
+    div.className = 'milestone ' + (unlocked ? 'unlocked' : 'locked') + (!revealed ? ' hidden-milestone' : '');
+    div.innerHTML = `
+      <span class="milestone-icon">${unlocked ? a.icon : '\u25AA'}</span>
+      <span>
+        <span class="milestone-name">${revealed ? a.name : '???'}</span><br>
+        <span class="milestone-desc">${revealed ? a.desc : ''}</span>
+      </span>`;
+    list.appendChild(div);
+  }
+}
+
+function checkAchievements() {
+  for (const a of ACHIEVEMENTS) {
+    if (!gs.achievements[a.id] && a.check(gs)) {
+      gs.achievements[a.id] = true;
+      showToast(`${a.icon} ${a.name}`);
+      renderMilestones();
+    }
+  }
+}
+
+function renderHabits() {
+  const container = document.getElementById('habits-section');
+  container.innerHTML = '';
+  const now = Date.now();
+  const COOLDOWN = 86400000; // 24 hours
+  for (let i = 0; i < gs.habits.length; i++) {
+    const h = gs.habits[i];
+    const onCooldown = h.lastDone && (now - h.lastDone) < COOLDOWN;
+    const buffActive = h.lastDone && (now - h.lastDone) < 3600000;
+    const remaining = onCooldown ? COOLDOWN - (now - h.lastDone) : 0;
+    const row = document.createElement('div');
+    row.className = 'habit-row' + (buffActive ? ' active' : '');
+    row.innerHTML = `
+      <div class="habit-icon">${h.icon}</div>
+      <div class="habit-info">
+        <input class="habit-name-input" value="${h.name}" data-idx="${i}" maxlength="20">
+        <div class="habit-meta">
+          ${h.streak > 0 ? `<span class="habit-streak">\u{1F525} ${h.streak}</span>` : ''}
+          ${buffActive ? `<span style="color:var(--accent);">+50% \u2022 ${fmtTime(3600000 - (now - h.lastDone))}</span>` : ''}
+          ${!buffActive && onCooldown ? `<span>${fmtTime(remaining)}</span>` : ''}
+        </div>
+      </div>
+      <button class="habit-done-btn" data-idx="${i}" ${onCooldown ? 'disabled' : ''}>
+        ${onCooldown ? (buffActive ? 'DONE' : 'WAIT') : 'DONE'}
+      </button>`;
+    container.appendChild(row);
+  }
+  container.querySelectorAll('.habit-name-input').forEach(inp => {
+    inp.addEventListener('change', e => { gs.habits[parseInt(e.target.dataset.idx)].name = e.target.value; });
+  });
+  container.querySelectorAll('.habit-done-btn').forEach(btn => {
+    btn.addEventListener('click', e => completeHabit(parseInt(e.target.dataset.idx)));
+  });
+}
+
+function completeHabit(idx) {
+  const h = gs.habits[idx];
+  const today = new Date().toDateString();
+  if (h.lastStreakDay) {
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (h.lastStreakDay === yesterday || h.lastStreakDay === today) {
+      if (h.lastStreakDay !== today) h.streak++;
+    } else { h.streak = 1; }
+  } else { h.streak = 1; }
+  h.lastStreakDay = today;
+  h.lastDone = Date.now();
+  showToast(`${h.icon} ${h.name} \u2014 +50% for 1h`);
+  renderHabits();
+}
+
+function fmtTime(ms) {
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
+  if (h > 0) return `${h}h${m % 60}m`;
+  if (m > 0) return `${m}m${s % 60}s`;
+  return `${s}s`;
+}
+
+function renderAll() { renderUpgrades(); renderPrestige(); renderMilestones(); renderHabits(); }
+
+// ============================================
+// TOASTS & MODALS
+// ============================================
+function showToast(msg) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+function showPrestigeModal() {
+  const o = document.createElement('div');
+  o.className = 'modal-overlay';
+  o.innerHTML = `<div class="modal">
+    <h2>The Boulder Falls</h2>
+    <p>The boulder rolls back. All upgrades reset.<br>But something remains.<br><br>+1 Fate Point (+25% to all production, permanent)<br><small style="color:#777">Next prestige will cost ${fmt(50000 * Math.pow(3, gs.prestigeCount + 1))}m</small></p>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Not Yet</button>
+      <button class="modal-btn" id="confirm-prestige">Let It Fall</button>
+    </div></div>`;
+  document.body.appendChild(o);
+  document.getElementById('confirm-prestige').addEventListener('click', () => { o.remove(); doPrestige(); });
+}
+
+function showIdleModal(earned, secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const o = document.createElement('div');
+  o.className = 'modal-overlay';
+  o.innerHTML = `<div class="modal">
+    <h2>Sisyphus Kept Pushing</h2>
+    <p>While you were away for ${timeStr}:</p>
+    <p style="font-family:'Cinzel',serif;font-size:28px;color:var(--fg);margin:12px 0;">+${fmt(earned)}m</p>
+    <div class="modal-buttons">
+      <button class="modal-btn" onclick="this.closest('.modal-overlay').remove()">Continue</button>
+    </div></div>`;
+  document.body.appendChild(o);
+}
+
+function showResetModal() {
+  const o = document.createElement('div');
+  o.className = 'modal-overlay';
+  o.innerHTML = `<div class="modal">
+    <h2>Reset All Data?</h2>
+    <p>All progress will be lost. No undo.</p>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+      <button class="modal-btn" id="confirm-reset">Reset</button>
+    </div></div>`;
+  document.body.appendChild(o);
+  document.getElementById('confirm-reset').addEventListener('click', () => { o.remove(); resetSave(); });
+}
+
+function spawnFloater(x, y, amount) {
+  const el = document.createElement('div');
+  el.className = 'click-float';
+  el.textContent = '+' + fmt(amount);
+  el.style.left = (x + (Math.random() - 0.5) * 30) + 'px';
+  el.style.top = (y - 20) + 'px';
+  el.style.fontSize = Math.min(14 + Math.log10(amount + 1) * 3, 26) + 'px';
+  document.getElementById('center').appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
+
+// ============================================
+// SCENE CANVAS — HILL + SISYPHUS + BOULDER
+// ============================================
+const canvas = document.getElementById('scene-canvas');
+const ctx = canvas.getContext('2d');
+
+let scrollOffset = 0;
+let boulderRotation = 0;
+let legPhase = 0;
+let particles = [];
+let milestoneAnim = 0;
+let lastMilestone = 0;
+let boulderIdleOsc = 0;
+
+// Pre-generate hill surface noise for seamless loop
+const HILL_TILE_W = 600; // tile width in px for seamless repeat
+const hillNoise = [];
+for (let i = 0; i <= HILL_TILE_W; i++) {
+  // Combine several sine waves for organic bumpy surface
+  const x = i / HILL_TILE_W * Math.PI * 2;
+  hillNoise.push(
+    Math.sin(x * 3) * 4 +
+    Math.sin(x * 7 + 1) * 2 +
+    Math.sin(x * 13 + 2) * 1
+  );
+}
+// Ensure seamless: last = first (already guaranteed by sin over full 2pi)
+
+// Pre-generate rocks along the hill surface for seamless loop
+const hillRocks = [];
+for (let i = 0; i < 20; i++) {
+  hillRocks.push({
+    x: Math.random() * HILL_TILE_W,
+    w: 4 + Math.random() * 12,
+    h: 3 + Math.random() * 6,
+    shade: 0.08 + Math.random() * 0.07
+  });
+}
+
+// Pre-generate distant mountain profile (seamless)
+const MTN_TILE_W = 800;
+const mtnProfile = [];
+for (let i = 0; i <= MTN_TILE_W; i++) {
+  const x = i / MTN_TILE_W * Math.PI * 2;
+  mtnProfile.push(
+    Math.sin(x * 2) * 40 +
+    Math.sin(x * 5 + 0.5) * 20 +
+    Math.sin(x * 1 + 2) * 30
+  );
+}
+
+// Boulder crack patterns (static)
+const boulderCracks = [];
+for (let i = 0; i < 10; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const segs = [];
+  let cx = 0, cy = 0;
+  for (let j = 0; j < 2 + Math.floor(Math.random() * 4); j++) {
+    const da = a + (Math.random() - 0.5) * 1.5;
+    const l = 5 + Math.random() * 20;
+    cx += Math.cos(da) * l;
+    cy += Math.sin(da) * l;
+    segs.push({ x: cx, y: cy });
+  }
+  boulderCracks.push(segs);
+}
+
+// Boulder texture dots
+const boulderDots = [];
+for (let i = 0; i < 80; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const r = Math.random() * 0.85;
+  boulderDots.push({ ax: Math.cos(a) * r, ay: Math.sin(a) * r, s: 0.5 + Math.random() * 1.5, v: 15 + Math.floor(Math.random() * 25) });
+}
+
+function getHillY(x) {
+  // Returns the noise offset for a given world-x
+  const tx = ((x % HILL_TILE_W) + HILL_TILE_W) % HILL_TILE_W;
+  const idx = Math.floor(tx);
+  const frac = tx - idx;
+  const a = hillNoise[idx % hillNoise.length];
+  const b = hillNoise[(idx + 1) % hillNoise.length];
+  return a + (b - a) * frac;
+}
+
+function getMtnY(x) {
+  const tx = ((x % MTN_TILE_W) + MTN_TILE_W) % MTN_TILE_W;
+  const idx = Math.floor(tx);
+  const frac = tx - idx;
+  const a = mtnProfile[idx % mtnProfile.length];
+  const b = mtnProfile[(idx + 1) % mtnProfile.length];
+  return a + (b - a) * frac;
+}
+
+function resizeCanvas() {
+  const area = document.getElementById('center');
+  const w = area.clientWidth;
+  const h = area.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+}
+
+function drawScene(dt) {
+  const W = canvas.width, H = canvas.height;
+  if (W === 0 || H === 0) return;
+
+  const autoRate = getAutoRate();
+  const isMoving = autoRate > 0 || sisStrain > 0;
+  const speed = isMoving ? Math.min(1 + Math.log10(autoRate + 1) * 2.5, 15) : 0;
+
+  // Scroll the world — only when something is pushing
+  scrollOffset += speed * dt * 40;
+
+  // Leg animation — only when moving
+  if (isMoving) {
+    legPhase += dt * (2.5 + Math.min(autoRate * 0.08, 8));
+  }
+
+  // Strain decay
+  if (sisStrain > 0) sisStrain = Math.max(0, sisStrain - dt * 2.5);
+  // Boulder spin: auto spin (always some when helpers active) + click spin decay
+  const autoSpinRate = autoRate > 0 ? Math.max(0.03, Math.min(autoRate * 0.001, 0.5)) : 0;
+  boulderRotation += (autoSpinRate + boulderSpin) * dt * 60;
+  boulderSpin *= 0.96;
+  if (boulderPulse > 0) boulderPulse = Math.max(0, boulderPulse - dt * 3);
+
+  // Idle oscillation
+  const timeSinceClick = (performance.now() - lastClickTime) / 1000;
+  if (timeSinceClick > 3 && autoRate < 0.5) {
+    boulderIdleOsc += dt * 1.2;
+  } else {
+    boulderIdleOsc *= 0.95;
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // --- SKY: subtle gradient ---
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, '#060606');
+  skyGrad.addColorStop(0.6, '#0a0a0a');
+  skyGrad.addColorStop(1, '#0f0f0f');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // --- STARS ---
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let i = 0; i < 50; i++) {
+    const sx = (i * 137.5 + 42) % W;
+    const sy = (i * 97.3 + 13) % (H * 0.4);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.4 + (i % 3) * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- DISTANT MOUNTAINS (parallax ×0.05) ---
+  const mtnBaseY = H * 0.52;
+  const mtnOff = scrollOffset * 0.05;
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.moveTo(-10, H);
+  for (let x = -10; x <= W + 10; x += 3) {
+    ctx.lineTo(x, mtnBaseY + getMtnY(x + mtnOff));
+  }
+  ctx.lineTo(W + 10, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // --- MID HILLS (parallax ×0.15) ---
+  const midBaseY = H * 0.6;
+  const midOff = scrollOffset * 0.15;
+  ctx.fillStyle = '#0e0e0e';
+  ctx.beginPath();
+  ctx.moveTo(-10, H);
+  for (let x = -10; x <= W + 10; x += 3) {
+    const nx = x + midOff;
+    const y = midBaseY + Math.sin(nx * 0.004) * 25 + Math.sin(nx * 0.011) * 12;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W + 10, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // --- MAIN HILL SLOPE ---
+  // The hill is a diagonal band. Sisyphus + boulder sit at center.
+  // Slope angle: gentle incline going left-to-right upward
+  const slopeAngle = -0.28; // rise per pixel rightward
+  const hillBaseY = H * 0.72; // baseline at center-x (higher to accommodate steeper slope)
+  const groundOff = scrollOffset; // full parallax
+
+  // Draw the ground surface
+  ctx.fillStyle = '#141414';
+  ctx.beginPath();
+  ctx.moveTo(-10, H);
+  for (let x = -10; x <= W + 10; x += 2) {
+    const worldX = x + groundOff;
+    const baseY = hillBaseY + (x - W * 0.5) * slopeAngle;
+    const noise = getHillY(worldX);
+    ctx.lineTo(x, baseY + noise);
+  }
+  ctx.lineTo(W + 10, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Ground surface line (top edge highlight)
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = -10; x <= W + 10; x += 2) {
+    const worldX = x + groundOff;
+    const baseY = hillBaseY + (x - W * 0.5) * slopeAngle;
+    const noise = getHillY(worldX);
+    if (x === -10) ctx.moveTo(x, baseY + noise);
+    else ctx.lineTo(x, baseY + noise);
+  }
+  ctx.stroke();
+
+  // Ground texture lines (horizontal scratches)
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 15; i++) {
+    const lx = (((i * 97 - groundOff * 0.8) % (W + 300)) + W + 300) % (W + 300) - 150;
+    const baseY = hillBaseY + (lx - W * 0.5) * slopeAngle + 8 + (i % 4) * 6;
+    ctx.beginPath();
+    ctx.moveTo(lx, baseY);
+    ctx.lineTo(lx + 20 + (i % 3) * 15, baseY + 1);
+    ctx.stroke();
+  }
+
+  // Rocks along the surface (seamlessly tiled)
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (const rock of hillRocks) {
+    const rx = ((rock.x - groundOff) % HILL_TILE_W + HILL_TILE_W) % HILL_TILE_W - HILL_TILE_W * 0.1;
+    // Map to screen x range
+    const screenX = rx / HILL_TILE_W * (W + 200) - 100;
+    const baseY = hillBaseY + (screenX - W * 0.5) * slopeAngle + getHillY(screenX + groundOff);
+    ctx.globalAlpha = rock.shade;
+    ctx.beginPath();
+    ctx.ellipse(screenX, baseY + 2, rock.w, rock.h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // --- DUST PARTICLES ---
+  const sisX = W * 0.48;
+  const sisGroundY = hillBaseY + (sisX - W * 0.5) * slopeAngle + getHillY(sisX + groundOff);
+
+  if (autoRate > 0 || sisStrain > 0) {
+    if (Math.random() < 0.4) {
+      particles.push({
+        x: sisX + Math.random() * 30 - 15,
+        y: sisGroundY - 2 + Math.random() * 4,
+        vx: -0.5 - Math.random() * 1.5,
+        vy: -0.5 - Math.random() * 1.5,
+        life: 1,
+        size: 0.5 + Math.random() * 1.5
+      });
+    }
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt * 40;
+    p.y += p.vy * dt * 40;
+    p.vy += 2 * dt;
+    p.life -= dt * 2;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.fillStyle = `rgba(255,255,255,${p.life * 0.15})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- MILESTONE STONE ---
+  const currentKm = Math.floor(gs.totalMeters / 1000);
+  if (currentKm > lastMilestone) {
+    lastMilestone = currentKm;
+    milestoneAnim = 1;
+  }
+  if (milestoneAnim > 0) {
+    milestoneAnim = Math.max(0, milestoneAnim - dt * 0.4);
+    const mx = W * 0.72;
+    const my = hillBaseY + (mx - W * 0.5) * slopeAngle + getHillY(mx + groundOff) - 20;
+    ctx.save();
+    ctx.globalAlpha = milestoneAnim;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(mx - 12, my - 18, 24, 22);
+    ctx.fillStyle = '#555';
+    ctx.font = '9px Cinzel, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(currentKm + 'km', mx, my - 4);
+    ctx.restore();
+  }
+
+  // --- SISYPHUS (minimalist figure) ---
+  const strainOff = sisStrain * 14;
+  const S = Math.min(W, H) / 550;
+  const figScale = Math.max(S, 0.55);
+
+  ctx.save();
+  ctx.translate(sisX + strainOff, sisGroundY);
+  ctx.rotate(slopeAngle * 1.3); // lean hard into the hill
+  ctx.scale(figScale, figScale);
+
+  const legAmp = (autoRate > 0 || sisStrain > 0) ? 1.0 : 0.06;
+  const legA = Math.sin(legPhase) * legAmp;
+  const legB = Math.sin(legPhase + Math.PI) * legAmp;
+  const strainX = sisStrain * 5;
+
+  // Body joints — hips back, shoulders forward, hunched into the push
+  const hipX = -4, hipY = -24;
+  const shoulderX = 6 - strainX, shoulderY = -58;
+  const headX = 8 - strainX, headY = -68;
+  const handX = shoulderX + 24 + strainX * 2, handY = shoulderY + 6;
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#888';
+
+  // Sisyphus faces right (pushing boulder to the right up the slope)
+  // Knees bend FORWARD (to the right, toward boulder)
+
+  // Back leg (behind, darker)
+  const bkX = hipX + 4 + legA * 10;
+  const bkY = hipY + 14 + Math.abs(legA) * 2;
+  const baX = hipX - 8 + legA * 16;
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(hipX, hipY);
+  ctx.lineTo(bkX, bkY);
+  ctx.lineTo(baX, 0);
+  ctx.stroke();
+
+  // Front leg (in front, brighter)
+  const fkX = hipX + 8 + legB * 10;
+  const fkY = hipY + 14 + Math.abs(legB) * 2;
+  const faX = hipX + legB * 16;
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(hipX, hipY);
+  ctx.lineTo(fkX, fkY);
+  ctx.lineTo(faX, 0);
+  ctx.stroke();
+
+  // Torso — single curved line, hunched forward
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(hipX, hipY);
+  ctx.quadraticCurveTo(-6, -44, shoulderX, shoulderY);
+  ctx.stroke();
+
+  // Back arm (behind)
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX, shoulderY + 2);
+  ctx.lineTo(handX - 2, handY + 4);
+  ctx.stroke();
+
+  // Front arm
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX + 2, shoulderY);
+  ctx.lineTo(handX, handY);
+  ctx.stroke();
+
+  // Head — simple circle
+  ctx.fillStyle = '#aaa';
+  ctx.beginPath();
+  ctx.arc(headX, headY, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // --- BOULDER ---
+  const BOULDER_R = Math.min(W, H) * 0.09;
+  const boulderX = sisX + 24 + strainOff + BOULDER_R * 0.6;
+  const boulderBaseY = hillBaseY + (boulderX - W * 0.5) * slopeAngle + getHillY(boulderX + groundOff) - BOULDER_R * 0.85;
+  const idleOff = Math.sin(boulderIdleOsc) * 2;
+
+  // Store boulder screen position for click detection
+  canvas._boulderX = boulderX + idleOff;
+  canvas._boulderY = boulderBaseY;
+  canvas._boulderR = BOULDER_R;
+
+  const pulseScale = 1 + boulderPulse * 0.05;
+
+  ctx.save();
+  ctx.translate(boulderX + idleOff, boulderBaseY);
+  ctx.scale(pulseScale, pulseScale);
+  ctx.rotate(boulderRotation);
+
+  // Boulder body
+  const bGrad = ctx.createRadialGradient(-BOULDER_R * 0.2, -BOULDER_R * 0.2, BOULDER_R * 0.05, 0, 0, BOULDER_R);
+  bGrad.addColorStop(0, '#555');
+  bGrad.addColorStop(0.4, '#383838');
+  bGrad.addColorStop(0.8, '#222');
+  bGrad.addColorStop(1, '#181818');
+  ctx.fillStyle = bGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Clip to boulder circle so nothing bleeds outside
+  ctx.beginPath();
+  ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
+  ctx.clip();
+
+  // Texture dots
+  for (const d of boulderDots) {
+    const v = d.v;
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.beginPath();
+    ctx.arc(d.ax * BOULDER_R, d.ay * BOULDER_R, d.s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Cracks
+  ctx.strokeStyle = 'rgba(80,80,80,0.35)';
+  ctx.lineWidth = 0.6;
+  for (const segs of boulderCracks) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (const s of segs) ctx.lineTo(s.x * BOULDER_R / 50, s.y * BOULDER_R / 50);
+    ctx.stroke();
+  }
+
+  // Highlight arc
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, BOULDER_R - 2, -2.3, -1.0);
+  ctx.stroke();
+
+  // Outer edge (drawn after restoring clip so it's clean)
+  ctx.restore();
+  ctx.save();
+  ctx.translate(boulderX + idleOff, boulderBaseY);
+  ctx.scale(pulseScale, pulseScale);
+  ctx.rotate(boulderRotation);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // Click pulse rings
+  for (let i = clickRings.length - 1; i >= 0; i--) {
+    const r = clickRings[i];
+    r.t -= dt * 2.5;
+    if (r.t <= 0) { clickRings.splice(i, 1); continue; }
+    const ringR = BOULDER_R + (1 - r.t) * 35;
+    ctx.strokeStyle = `rgba(200,200,200,${r.t * 0.25})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(boulderX + idleOff, boulderBaseY, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Buff glow around Sisyphus
+  const buffActive = gs.habits.some(h => h.lastDone && (Date.now() - h.lastDone) < 3600000);
+  if (buffActive) {
+    const glow = ctx.createRadialGradient(sisX, sisGroundY - 25, 5, sisX, sisGroundY - 25, 60);
+    glow.addColorStop(0, 'rgba(255,255,255,0.04)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(sisX - 70, sisGroundY - 90, 140, 120);
+  }
+}
+
+// Click detection on boulder
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  const bx = canvas._boulderX || 0;
+  const by = canvas._boulderY || 0;
+  const br = canvas._boulderR || 50;
+  const dx = x - bx;
+  const dy = y - by;
+
+  // Generous click radius (1.3× boulder)
+  if (dx * dx + dy * dy <= (br * 1.3) * (br * 1.3)) {
+    doClick(e.clientX, e.clientY);
+  }
+});
+
+// ============================================
+// GAME LOOP
+// ============================================
+let lastTime = performance.now();
+let lastEconTime = Date.now();
+let saveTimer = 0;
+let uiTimer = 0;
+let upgradeTimer = 0;
+let fpsFrames = 0, fpsTime = 0;
+
+// Economy tick — runs via setInterval so it works when tab is hidden
+function econTick() {
+  const now = Date.now();
+  const dt = Math.min((now - lastEconTime) / 1000, 5);
+  lastEconTime = now;
+
+  const autoRate = getAutoRate();
+  if (autoRate > 0) {
+    const gain = autoRate * dt;
+    gs.meters += gain;
+    gs.totalMeters += gain;
+  }
+
+  saveTimer += dt;
+  if (saveTimer >= 30) { saveTimer = 0; saveGame(); }
+
+  checkAchievements();
+}
+
+// Render loop — only visual, pauses when tab hidden (that's fine)
+function gameLoop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  uiTimer += dt;
+  if (uiTimer > 0.1) {
+    uiTimer = 0;
+    const autoRate = getAutoRate();
+    document.getElementById('stat-total').textContent = fmt(gs.meters);
+    document.getElementById('stat-mps').textContent = autoRate >= 1 ? fmt(autoRate) : autoRate.toFixed(1);
+    document.getElementById('stat-mpc').textContent = fmt(getClickPower());
+    document.getElementById('stat-fate').textContent = (1 + gs.fatePoints * 0.25).toFixed(1) + 'x';
+    document.getElementById('stat-lifetime').textContent = fmt(gs.totalMeters);
+    renderPrestige();
+  }
+
+  upgradeTimer += dt;
+  if (upgradeTimer > 0.5) { upgradeTimer = 0; renderUpgrades(); }
+
+  resizeCanvas();
+  drawScene(dt);
+
+  if (Math.floor(now / 1000) !== Math.floor((now - dt * 1000) / 1000)) {
+    renderHabits();
+  }
+
+  fpsFrames++;
+  fpsTime += dt;
+  if (fpsTime >= 1) {
+    const fpsEl = document.getElementById('fps-display');
+    if (gs.settings.fps) {
+      fpsEl.style.display = 'block';
+      fpsEl.textContent = fpsFrames + ' FPS';
+    } else {
+      fpsEl.style.display = 'none';
+    }
+    fpsFrames = 0;
+    fpsTime = 0;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================
+// DEV MODE
+// ============================================
+document.addEventListener('keydown', (e) => {
+  devSequence.push(e.key);
+  if (devSequence.length > DEV_CODE.length) devSequence.shift();
+  if (devSequence.length === DEV_CODE.length && devSequence.every((k, i) => k === DEV_CODE[i])) {
+    devMode = !devMode;
+    document.getElementById('dev-indicator').classList.toggle('show', devMode);
+    showToast(devMode ? 'Dev mode ON' : 'Dev mode OFF');
+    renderAll();
+    devSequence = [];
+  }
+});
+
+// ============================================
+// INIT
+// ============================================
+function init() {
+  loadGame();
+  lastMilestone = Math.floor(gs.totalMeters / 1000);
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      renderUpgrades();
+    });
+  });
+
+  document.getElementById('prestige-btn').addEventListener('click', () => {
+    if (gs.meters >= getPrestigeCost()) showPrestigeModal();
+  });
+
+  document.getElementById('settings-btn').addEventListener('click', () => {
+    document.getElementById('settings-panel').classList.toggle('open');
+  });
+  document.getElementById('fps-toggle').checked = gs.settings.fps || false;
+  document.getElementById('fps-toggle').addEventListener('change', e => { gs.settings.fps = e.target.checked; });
+  document.getElementById('reset-save-btn').addEventListener('click', showResetModal);
+  document.addEventListener('click', e => {
+    const sp = document.getElementById('settings-panel');
+    const sb = document.getElementById('settings-btn');
+    if (!sp.contains(e.target) && !sb.contains(e.target)) sp.classList.remove('open');
+  });
+
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+  window.addEventListener('beforeunload', saveGame);
+
+  renderAll();
+  setInterval(econTick, 250);
+  requestAnimationFrame(gameLoop);
+}
+
+init();
+</script>
+</body>
+</html>
