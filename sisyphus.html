@@ -1032,8 +1032,10 @@ let scrollOffset = 0;
 let boulderRotation = 0;
 let legPhase = 0;
 let particles = [];
+let ambientParticles = [];
 let milestoneAnim = 0;
 let lastMilestone = 0;
+let milestoneLabel = '';
 let boulderIdleOsc = 0;
 
 // Pre-generate hill surface noise for seamless loop
@@ -1266,21 +1268,34 @@ function drawScene(dt) {
   }
   ctx.globalAlpha = 1;
 
-  // --- DUST PARTICLES ---
+  // --- DUST PARTICLES (scales with auto rate) ---
   const sisX = W * 0.48;
   const sisGroundY = hillBaseY + (sisX - W * 0.5) * slopeAngle + getHillY(sisX + groundOff);
 
-  if (autoRate > 0 || sisStrain > 0) {
-    if (Math.random() < 0.4) {
-      particles.push({
-        x: sisX + Math.random() * 30 - 15,
-        y: sisGroundY - 2 + Math.random() * 4,
-        vx: -0.5 - Math.random() * 1.5,
-        vy: -0.5 - Math.random() * 1.5,
-        life: 1,
-        size: 0.5 + Math.random() * 1.5
-      });
-    }
+  // Spawn rate and intensity scale with production
+  const dustIntensity = Math.min(1, Math.log10(autoRate + 1) / 3);
+  const spawnChance = autoRate > 0 || sisStrain > 0 ? 0.2 + dustIntensity * 0.6 : 0;
+  if (Math.random() < spawnChance) {
+    const spread = 20 + dustIntensity * 30;
+    particles.push({
+      x: sisX + Math.random() * spread - spread * 0.4,
+      y: sisGroundY - 2 + Math.random() * 4,
+      vx: -0.3 - Math.random() * (1 + dustIntensity * 2),
+      vy: -0.3 - Math.random() * (1 + dustIntensity),
+      life: 0.8 + dustIntensity * 0.7,
+      size: 0.4 + Math.random() * (1 + dustIntensity * 1.5)
+    });
+  }
+  // Extra burst particles at high rates
+  if (autoRate > 100 && Math.random() < dustIntensity * 0.3) {
+    particles.push({
+      x: sisX + Math.random() * 50 - 20,
+      y: sisGroundY - Math.random() * 10,
+      vx: -1 - Math.random() * 3,
+      vy: -1.5 - Math.random() * 2,
+      life: 1.2,
+      size: 1 + Math.random() * 2
+    });
   }
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
@@ -1289,30 +1304,106 @@ function drawScene(dt) {
     p.vy += 2 * dt;
     p.life -= dt * 2;
     if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.fillStyle = `rgba(255,255,255,${p.life * 0.15})`;
+    ctx.fillStyle = `rgba(255,255,255,${p.life * (0.2 + dustIntensity * 0.25)})`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // --- MILESTONE STONE ---
+  // --- AMBIENT FLOATING PARTICLES (appear with progression) ---
+  const ambientDensity = Math.min(12, Math.floor(Math.log10(autoRate + 1) * 3));
+  while (ambientParticles.length < ambientDensity) {
+    ambientParticles.push({
+      x: Math.random() * W, y: Math.random() * H * 0.7,
+      vx: -0.1 + Math.random() * 0.2, vy: -0.05 - Math.random() * 0.1,
+      phase: Math.random() * Math.PI * 2, size: 0.3 + Math.random() * 0.8, life: 1
+    });
+  }
+  while (ambientParticles.length > ambientDensity) ambientParticles.pop();
+  for (const ap of ambientParticles) {
+    ap.x += ap.vx * dt * 20;
+    ap.y += ap.vy * dt * 20;
+    ap.phase += dt * 0.8;
+    ap.x += Math.sin(ap.phase) * dt * 3;
+    if (ap.y < -10 || ap.x < -10 || ap.x > W + 10) {
+      ap.x = Math.random() * W; ap.y = H * 0.5 + Math.random() * H * 0.3;
+      ap.phase = Math.random() * Math.PI * 2;
+    }
+    const flicker = 0.5 + Math.sin(ap.phase) * 0.3;
+    ctx.fillStyle = `rgba(255,255,255,${0.12 * flicker})`;
+    ctx.beginPath();
+    ctx.arc(ap.x, ap.y, ap.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- MILESTONE STONE (spaced out at key thresholds) ---
+  const STONE_THRESHOLDS = [1,5,10,25,50,100,250,500,1000,2500,5000,10000,25000,50000,100000];
   const currentKm = Math.floor(gs.totalMeters / 1000);
-  if (currentKm > lastMilestone) {
-    lastMilestone = currentKm;
+  const nextThreshold = STONE_THRESHOLDS.find(t => t > lastMilestone) || (lastMilestone + 100000);
+  if (currentKm >= nextThreshold) {
+    lastMilestone = nextThreshold;
     milestoneAnim = 1;
+    milestoneLabel = nextThreshold >= 1000 ? (nextThreshold / 1000) + 'M' : nextThreshold + 'km';
   }
   if (milestoneAnim > 0) {
-    milestoneAnim = Math.max(0, milestoneAnim - dt * 0.4);
+    milestoneAnim = Math.max(0, milestoneAnim - dt * 0.25);
     const mx = W * 0.72;
     const my = hillBaseY + (mx - W * 0.5) * slopeAngle + getHillY(mx + groundOff) - 20;
     ctx.save();
     ctx.globalAlpha = milestoneAnim;
     ctx.fillStyle = '#222';
-    ctx.fillRect(mx - 12, my - 18, 24, 22);
+    ctx.fillRect(mx - 14, my - 18, 28, 22);
     ctx.fillStyle = '#555';
     ctx.font = '9px Cinzel, serif';
     ctx.textAlign = 'center';
-    ctx.fillText(currentKm + 'km', mx, my - 4);
+    ctx.fillText(milestoneLabel, mx, my - 4);
+    ctx.restore();
+  }
+
+  // --- HELPER SHADOW FIGURES ---
+  // Count total helpers purchased
+  const helperCount = UPGRADES.helpers.reduce((sum, u) => sum + getCount(u.id), 0);
+  const shadowCount = Math.min(5, Math.floor(Math.log2(helperCount + 1)));
+  for (let si = shadowCount; si >= 1; si--) {
+    const sOff = si * 38;
+    const sAlpha = Math.max(0.08, 0.3 - si * 0.04);
+    const sScale = Math.max(0.35, 0.5 - si * 0.03);
+    const sGroundY = hillBaseY + (sisX - sOff - W * 0.5) * slopeAngle + getHillY(sisX - sOff + groundOff);
+    const sLeg = (autoRate > 0) ? Math.sin(legPhase + si * 0.8) * 0.8 : 0;
+    ctx.save();
+    ctx.globalAlpha = sAlpha;
+    ctx.translate(sisX - sOff, sGroundY);
+    ctx.rotate(slopeAngle * 1.3);
+    ctx.scale(sScale, sScale);
+    // Simplified shadow figure — torso + head + legs
+    ctx.strokeStyle = '#fff';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-4, -24);
+    ctx.quadraticCurveTo(-6, -44, 6, -58);
+    ctx.stroke();
+    // Head
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(8, -68, 5, 0, Math.PI * 2);
+    ctx.fill();
+    // Legs
+    ctx.beginPath();
+    ctx.moveTo(-4, -24);
+    ctx.lineTo(-4 + 8 + sLeg * 10, -10 + Math.abs(sLeg) * 2);
+    ctx.lineTo(-4 + sLeg * 16, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-4, -24);
+    ctx.lineTo(-4 + 4 - sLeg * 10, -10 + Math.abs(sLeg) * 2);
+    ctx.lineTo(-4 - 8 - sLeg * 16, 0);
+    ctx.stroke();
+    // Arms reaching forward
+    ctx.beginPath();
+    ctx.moveTo(6, -56);
+    ctx.lineTo(28, -50);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1399,6 +1490,103 @@ function drawScene(dt) {
 
   ctx.restore();
 
+  // --- TEUMESSIAN FOX (appears with Stoic Acceptance) ---
+  if (getCount('stoic') > 0) {
+    const foxPhase = legPhase * 0.7 + 1.2;
+    const foxX = sisX - 55 - Math.sin(foxPhase * 0.4) * 6;
+    const foxGroundY = hillBaseY + (foxX - W * 0.5) * slopeAngle + getHillY(foxX + groundOff);
+    const foxS = figScale * 0.35;
+    const foxBob = Math.sin(foxPhase * 1.5) * 1.5;
+    ctx.save();
+    ctx.translate(foxX, foxGroundY + foxBob);
+    ctx.rotate(slopeAngle * 0.8);
+    ctx.scale(foxS, foxS);
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#ccc';
+    ctx.fillStyle = '#ccc';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 2.5;
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(-18, -12);
+    ctx.quadraticCurveTo(0, -16, 16, -12);
+    ctx.stroke();
+    // Head
+    ctx.beginPath();
+    ctx.arc(20, -14, 5, 0, Math.PI * 2);
+    ctx.fill();
+    // Ears (pointed)
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(18, -18); ctx.lineTo(16, -26); ctx.lineTo(14, -18);
+    ctx.moveTo(23, -17); ctx.lineTo(24, -25); ctx.lineTo(20, -17);
+    ctx.stroke();
+    // Snout
+    ctx.beginPath();
+    ctx.moveTo(24, -13); ctx.lineTo(30, -11);
+    ctx.stroke();
+    // Legs (trotting)
+    const fLeg = Math.sin(foxPhase) * 6;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-12, -10); ctx.lineTo(-12 + fLeg, 0);
+    ctx.moveTo(-4, -10); ctx.lineTo(-4 - fLeg, 0);
+    ctx.moveTo(8, -10); ctx.lineTo(8 + fLeg * 0.7, 0);
+    ctx.moveTo(14, -10); ctx.lineTo(14 - fLeg * 0.7, 0);
+    ctx.stroke();
+    // Tail (bushy, curved up)
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-18, -12);
+    ctx.quadraticCurveTo(-26, -20 + Math.sin(foxPhase * 0.5) * 4, -22, -28);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // --- GUARDIAN ANGEL (appears with Olympian Favor) ---
+  if (getCount('olympian_fav') > 0) {
+    const angelFloat = Math.sin(performance.now() * 0.001) * 8;
+    const angelX = sisX + 10;
+    const angelY = sisGroundY - 110 + angelFloat;
+    const aS = figScale * 0.4;
+    ctx.save();
+    ctx.translate(angelX, angelY);
+    ctx.scale(aS, aS);
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#fff';
+    ctx.lineCap = 'round';
+    // Body (simple robe shape)
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -8);
+    ctx.lineTo(-8, 18);
+    ctx.lineTo(8, 18);
+    ctx.closePath();
+    ctx.stroke();
+    // Head
+    ctx.beginPath();
+    ctx.arc(0, -14, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Halo
+    ctx.globalAlpha = 0.15;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, -22, 8, 3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // Wings
+    ctx.globalAlpha = 0.2;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const wingFlap = Math.sin(performance.now() * 0.002) * 4;
+    ctx.moveTo(-2, -6);
+    ctx.quadraticCurveTo(-22, -18 + wingFlap, -18, 4);
+    ctx.moveTo(2, -6);
+    ctx.quadraticCurveTo(22, -18 - wingFlap, 18, 4);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // --- BOULDER ---
   const BOULDER_R = Math.min(W, H) * 0.09;
   const boulderX = sisX + 24 + strainOff + BOULDER_R * 0.6;
@@ -1411,6 +1599,27 @@ function drawScene(dt) {
   canvas._boulderR = BOULDER_R;
 
   const pulseScale = 1 + boulderPulse * 0.05;
+
+  // --- BLESSING GLOW around boulder ---
+  const blessingCount = UPGRADES.blessings.reduce((sum, u) => sum + getCount(u.id), 0);
+  if (blessingCount > 0) {
+    const glowAlpha = Math.min(0.4, blessingCount * 0.08);
+    const glowSize = BOULDER_R * (1.6 + blessingCount * 0.2);
+    ctx.save();
+    ctx.globalAlpha = glowAlpha;
+    const bGlow = ctx.createRadialGradient(
+      boulderX + idleOff, boulderBaseY, BOULDER_R * 0.3,
+      boulderX + idleOff, boulderBaseY, glowSize
+    );
+    bGlow.addColorStop(0, 'rgba(255,255,255,0.6)');
+    bGlow.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+    bGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = bGlow;
+    ctx.beginPath();
+    ctx.arc(boulderX + idleOff, boulderBaseY, glowSize, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.translate(boulderX + idleOff, boulderBaseY);
@@ -1610,7 +1819,9 @@ document.addEventListener('keydown', (e) => {
 // ============================================
 function init() {
   loadGame();
-  lastMilestone = Math.floor(gs.totalMeters / 1000);
+  const km = Math.floor(gs.totalMeters / 1000);
+  const STONE_INIT = [1,5,10,25,50,100,250,500,1000,2500,5000,10000,25000,50000,100000];
+  lastMilestone = [...STONE_INIT].reverse().find(t => t <= km) || 0;
 
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
