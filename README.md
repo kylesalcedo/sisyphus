@@ -1,8 +1,12 @@
 # Sisyphus
 
-A minimalist idle clicker game in a single HTML file. Click the boulder. Push it up the hill. Forever.
+Train your fingers, test your meaning, and imagine yourself happy with this clicker game!
 
-**[Play it now](https://kylesalcedo.github.io/sisyphus/sisyphus.html)**
+<p align="center">
+  <img src="boulder.png" alt="The Boulder" width="200">
+  <br><br>
+  [<a href="https://kylesalcedo.github.io/sisyphus/sisyphus.html">click here to play</a>]
+</p>
 
 Sisyphus doubles as a finger workout. Every click is a rep — build Calloused Hands, earn an Iron Grip, and work toward Atlas' Grip one press at a time. If you're on a trackpad, try alternating fingers (index, middle, ring) to spread the effort and strengthen each one. Both left and right clicks count, so you can train your index finger with right-clicks too.
 
