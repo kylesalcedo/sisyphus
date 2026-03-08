@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sisyphus</title>
-<link rel="icon" type="image/png" href="boulder.png">
+<link rel="icon" type="image/png" href="boulder.png?v=2">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
@@ -1603,9 +1603,9 @@ function drawScene(dt) {
 
   // --- GUARDIAN ANGEL (appears with Olympian Favor) ---
   if (getCount('olympian_fav') > 0) {
-    const angelFloat = Math.sin(performance.now() * 0.001) * 8;
-    const angelX = sisX - 45;
-    const angelY = sisGroundY - 110 + angelFloat;
+    const angelFloat = Math.sin(performance.now() * 0.0006) * 3;
+    const angelX = sisX - 70;
+    const angelY = sisGroundY - 85 + angelFloat;
     const aS = figScale * 0.4;
     ctx.save();
     ctx.translate(angelX, angelY);
