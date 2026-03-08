@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sisyphus</title>
+<link rel="icon" type="image/png" href="boulder.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
@@ -185,6 +186,18 @@ html, body {
   text-transform: uppercase;
   color: var(--dim);
   margin-top: 2px;
+}
+.intro-tagline {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--dim);
+  margin-top: 16px;
+  line-height: 1.5;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0.8;
 }
 .sub-stats {
   display: flex;
@@ -484,6 +497,32 @@ html, body {
 }
 #dev-indicator.show { display: block; color: #555; }
 
+#dev-menu {
+  position: fixed;
+  top: 28px; right: 12px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 8px;
+  z-index: 200;
+  display: none;
+  font-family: monospace;
+  font-size: 12px;
+}
+#dev-menu.show { display: flex; flex-direction: column; gap: 4px; }
+#dev-menu button {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #aaa;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 11px;
+  border-radius: 3px;
+  text-align: left;
+}
+#dev-menu button:hover { background: #252525; color: #ddd; }
+
 #fps-display {
   position: fixed;
   bottom: 12px; left: 12px;
@@ -535,6 +574,11 @@ html, body {
           <div class="sub-stat-label">lifetime</div>
         </div>
       </div>
+      <div class="intro-tagline" id="intro-tagline">
+        Strengthen your fingers, one click at a time.<br>
+        Trackpad? Try alternating fingers — index, middle, ring.<br>
+        Right-click counts too.
+      </div>
     </div>
   </div>
 
@@ -563,6 +607,17 @@ html, body {
   <button id="reset-save-btn">Reset Save</button>
 </div>
 <div id="dev-indicator">DEV</div>
+<div id="dev-menu">
+  <button onclick="gs.meters+=100000;gs.totalMeters+=100000;showToast('+100k meters')">+100k meters</button>
+  <button onclick="gs.meters+=1000000;gs.totalMeters+=1000000;showToast('+1M meters')">+1M meters</button>
+  <button onclick="gs.meters+=1e9;gs.totalMeters+=1e9;showToast('+1B meters')">+1B meters</button>
+  <button onclick="UPGRADES.strength.forEach(u=>{gs.bought[u.id]=(gs.bought[u.id]||0)+1});UPGRADES.helpers.forEach(u=>{gs.bought[u.id]=(gs.bought[u.id]||0)+1});UPGRADES.blessings.forEach(u=>{if(!gs.bought[u.id])gs.bought[u.id]=1});recalc();renderAll();showToast('All upgrades +1')">Buy all upgrades</button>
+  <button onclick="doPrestige();showToast('Prestiged')">Force prestige</button>
+  <button onclick="gs.habits.forEach(h=>{h.lastDone=0;h.streak=0;h.lastStreakDay=''});renderHabits();showToast('Habits reset')">Reset habits</button>
+  <button onclick="gs.habits.forEach(h=>{h.streak+=7;h.lastStreakDay=new Date().toDateString()});renderHabits();showToast('+7 streak all')">+7 streaks</button>
+  <button onclick="useBoulderPng=!useBoulderPng;showToast(useBoulderPng?'Boulder PNG ON':'Boulder PNG OFF')">Toggle boulder PNG</button>
+  <button onclick="Object.assign(gs,DEFAULT_STATE());gs.prestigeCount=0;gs.fatePoints=0;gs.firstPrestigeDone=false;recalc();renderAll();showToast('Fresh start (no prestige)')">Fresh restart</button>
+</div>
 <div id="fps-display"></div>
 
 <script>
@@ -589,8 +644,11 @@ const DEFAULT_STATE = () => ({
 
 let gs = DEFAULT_STATE();
 let devMode = false;
+let useBoulderPng = false;
+const boulderImg = new Image();
+boulderImg.src = 'boulder.png';
 let devSequence = [];
-const DEV_CODE = ['ArrowLeft','ArrowRight','ArrowLeft','ArrowRight'];
+const DEV_CODE = ['ArrowUp','ArrowDown','ArrowRight','ArrowLeft','ArrowUp'];
 
 // ============================================
 // UPGRADES
@@ -925,7 +983,7 @@ function renderHabits() {
     container.appendChild(row);
   }
   container.querySelectorAll('.habit-name-input').forEach(inp => {
-    inp.addEventListener('change', e => { gs.habits[parseInt(e.target.dataset.idx)].name = e.target.value; });
+    inp.addEventListener('input', e => { gs.habits[parseInt(e.target.dataset.idx)].name = e.target.value; });
   });
   container.querySelectorAll('.habit-done-btn').forEach(btn => {
     btn.addEventListener('click', e => completeHabit(parseInt(e.target.dataset.idx)));
@@ -1546,7 +1604,7 @@ function drawScene(dt) {
   // --- GUARDIAN ANGEL (appears with Olympian Favor) ---
   if (getCount('olympian_fav') > 0) {
     const angelFloat = Math.sin(performance.now() * 0.001) * 8;
-    const angelX = sisX + 10;
+    const angelX = sisX - 45;
     const angelY = sisGroundY - 110 + angelFloat;
     const aS = figScale * 0.4;
     ctx.save();
@@ -1626,47 +1684,52 @@ function drawScene(dt) {
   ctx.scale(pulseScale, pulseScale);
   ctx.rotate(boulderRotation);
 
-  // Boulder body
-  const bGrad = ctx.createRadialGradient(-BOULDER_R * 0.2, -BOULDER_R * 0.2, BOULDER_R * 0.05, 0, 0, BOULDER_R);
-  bGrad.addColorStop(0, '#555');
-  bGrad.addColorStop(0.4, '#383838');
-  bGrad.addColorStop(0.8, '#222');
-  bGrad.addColorStop(1, '#181818');
-  ctx.fillStyle = bGrad;
-  ctx.beginPath();
-  ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Clip to boulder circle so nothing bleeds outside
-  ctx.beginPath();
-  ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
-  ctx.clip();
-
-  // Texture dots
-  for (const d of boulderDots) {
-    const v = d.v;
-    ctx.fillStyle = `rgb(${v},${v},${v})`;
+  if ((useBoulderPng || gs.firstPrestigeDone) && boulderImg.complete && boulderImg.naturalWidth > 0) {
+    // Draw the PNG boulder image
+    ctx.drawImage(boulderImg, -BOULDER_R, -BOULDER_R, BOULDER_R * 2, BOULDER_R * 2);
+  } else {
+    // Boulder body
+    const bGrad = ctx.createRadialGradient(-BOULDER_R * 0.2, -BOULDER_R * 0.2, BOULDER_R * 0.05, 0, 0, BOULDER_R);
+    bGrad.addColorStop(0, '#555');
+    bGrad.addColorStop(0.4, '#383838');
+    bGrad.addColorStop(0.8, '#222');
+    bGrad.addColorStop(1, '#181818');
+    ctx.fillStyle = bGrad;
     ctx.beginPath();
-    ctx.arc(d.ax * BOULDER_R, d.ay * BOULDER_R, d.s, 0, Math.PI * 2);
+    ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
     ctx.fill();
-  }
 
-  // Cracks
-  ctx.strokeStyle = 'rgba(80,80,80,0.35)';
-  ctx.lineWidth = 0.6;
-  for (const segs of boulderCracks) {
+    // Clip to boulder circle so nothing bleeds outside
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    for (const s of segs) ctx.lineTo(s.x * BOULDER_R / 50, s.y * BOULDER_R / 50);
+    ctx.arc(0, 0, BOULDER_R, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Texture dots
+    for (const d of boulderDots) {
+      const v = d.v;
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.beginPath();
+      ctx.arc(d.ax * BOULDER_R, d.ay * BOULDER_R, d.s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cracks
+    ctx.strokeStyle = 'rgba(80,80,80,0.35)';
+    ctx.lineWidth = 0.6;
+    for (const segs of boulderCracks) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      for (const s of segs) ctx.lineTo(s.x * BOULDER_R / 50, s.y * BOULDER_R / 50);
+      ctx.stroke();
+    }
+
+    // Highlight arc
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, BOULDER_R - 2, -2.3, -1.0);
     ctx.stroke();
   }
-
-  // Highlight arc
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, BOULDER_R - 2, -2.3, -1.0);
-  ctx.stroke();
 
   // Outer edge (drawn after restoring clip so it's clean)
   ctx.restore();
@@ -1706,8 +1769,8 @@ function drawScene(dt) {
   }
 }
 
-// Click detection on boulder
-canvas.addEventListener('click', (e) => {
+// Click detection on boulder (left + right click)
+function handleBoulderClick(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -1724,6 +1787,14 @@ canvas.addEventListener('click', (e) => {
   if (dx * dx + dy * dy <= (br * 1.3) * (br * 1.3)) {
     doClick(e.clientX, e.clientY);
   }
+}
+
+canvas.addEventListener('click', handleBoulderClick);
+
+// Enable right-click on boulder (suppress context menu on canvas)
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  handleBoulderClick(e);
 });
 
 // ============================================
@@ -1779,7 +1850,10 @@ function gameLoop(now) {
   drawScene(dt);
 
   if (Math.floor(now / 1000) !== Math.floor((now - dt * 1000) / 1000)) {
-    renderHabits();
+    // Skip re-render if user is editing a habit name
+    if (!document.activeElement || !document.activeElement.classList.contains('habit-name-input')) {
+      renderHabits();
+    }
   }
 
   fpsFrames++;
@@ -1808,6 +1882,7 @@ document.addEventListener('keydown', (e) => {
   if (devSequence.length === DEV_CODE.length && devSequence.every((k, i) => k === DEV_CODE[i])) {
     devMode = !devMode;
     document.getElementById('dev-indicator').classList.toggle('show', devMode);
+    document.getElementById('dev-menu').classList.toggle('show', devMode);
     showToast(devMode ? 'Dev mode ON' : 'Dev mode OFF');
     renderAll();
     devSequence = [];
