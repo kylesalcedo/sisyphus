@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(start:*)"
+      "Bash(start:*)",
+      "Bash(git checkout:*)",
+      "Bash(open:*)",
+      "Bash(gh api:*)",
+      "Bash(git:*)",
+      "Bash(gh repo:*)",
+      "Bash(identify:*)",
+      "Bash(mkdir:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)"
     ]
   }
 }

@@ -299,6 +299,66 @@ html, body {
   margin-top: 4px;
 }
 
+#skins-section {
+  display: none;
+  border-bottom: 1px solid var(--border);
+}
+#skins-section.show { display: block; }
+.skins-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.skins-toggle:hover { color: var(--fg); }
+#skins-grid {
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 8px 14px 10px;
+}
+#skins-grid.expanded {
+  display: grid;
+}
+.skin-card {
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid var(--faint);
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d0d;
+  transition: border-color 0.15s;
+}
+.skin-card:hover { border-color: var(--dim); }
+.skin-card.active { border-color: var(--accent); box-shadow: 0 0 8px rgba(153,153,153,0.3); }
+.skin-card.locked { opacity: 0.4; cursor: default; }
+.skin-card.locked img { display: none; }
+.skin-card.locked::before {
+  content: '?';
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  color: var(--faint);
+}
+.skin-card img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+.skin-card .skin-label {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  text-align: center;
+  color: var(--dim);
+  background: rgba(0,0,0,0.7);
+  padding: 2px 0;
+  letter-spacing: 0.5px;
+}
+
 #milestones-list {
   flex: 1;
   overflow-y: auto;
@@ -524,12 +584,12 @@ html, body {
 #dev-menu button:hover { background: #252525; color: #ddd; }
 
 #fps-display {
-  position: fixed;
-  bottom: 12px; left: 12px;
+  position: absolute;
+  top: 8px; right: 8px;
   font-family: monospace;
   font-size: 11px;
   color: #444;
-  z-index: 100;
+  z-index: 10;
   display: none;
 }
 
@@ -553,6 +613,7 @@ html, body {
 
   <div id="center">
     <canvas id="scene-canvas"></canvas>
+    <div id="fps-display"></div>
     <div id="stats">
       <div class="total-meters" id="stat-total">0</div>
       <div class="total-label">meters</div>
@@ -594,6 +655,10 @@ html, body {
       </div>
       <div class="prestige-req" id="prestige-req"></div>
     </div>
+    <div id="skins-section">
+      <div class="section-title skins-toggle" id="skins-toggle">Boulder Skins</div>
+      <div id="skins-grid"></div>
+    </div>
     <div class="section-title">Milestones</div>
     <div id="milestones-list"></div>
   </div>
@@ -616,9 +681,10 @@ html, body {
   <button onclick="gs.habits.forEach(h=>{h.lastDone=0;h.streak=0;h.lastStreakDay=''});renderHabits();showToast('Habits reset')">Reset habits</button>
   <button onclick="gs.habits.forEach(h=>{h.streak+=7;h.lastStreakDay=new Date().toDateString()});renderHabits();showToast('+7 streak all')">+7 streaks</button>
   <button onclick="useBoulderPng=!useBoulderPng;showToast(useBoulderPng?'Boulder PNG ON':'Boulder PNG OFF')">Toggle boulder PNG</button>
-  <button onclick="Object.assign(gs,DEFAULT_STATE());gs.prestigeCount=0;gs.fatePoints=0;gs.firstPrestigeDone=false;recalc();renderAll();showToast('Fresh start (no prestige)')">Fresh restart</button>
+  <button onclick="gs.unlockedSkins=BOULDER_SKINS.map(s=>s.id);gs.firstPrestigeDone=true;renderAll();showToast('All skins unlocked')">Unlock all skins</button>
+  <button onclick="const ids=BOULDER_SKINS.map(s=>s.id);const i=(ids.indexOf(gs.activeSkin)+1)%ids.length;gs.activeSkin=ids[i];useBoulderPng=true;gs.firstPrestigeDone=true;if(!gs.unlockedSkins.includes(ids[i]))gs.unlockedSkins.push(ids[i]);renderSkins();showToast('Skin: '+BOULDER_SKINS[i].name)">Cycle skin &rarr;</button>
+  <button onclick="Object.assign(gs,DEFAULT_STATE());gs.prestigeCount=0;gs.fatePoints=0;gs.firstPrestigeDone=false;gs.unlockedSkins=['boulder'];gs.activeSkin='boulder';recalc();renderAll();showToast('Fresh start (no prestige)')">Fresh restart</button>
 </div>
-<div id="fps-display"></div>
 
 <script>
 // ============================================
@@ -639,14 +705,40 @@ const DEFAULT_STATE = () => ({
   settings: { fps: false },
   lastSave: Date.now(),
   lastOnline: Date.now(),
-  firstPrestigeDone: false
+  firstPrestigeDone: false,
+  unlockedSkins: ['boulder'],
+  activeSkin: 'boulder'
 });
 
 let gs = DEFAULT_STATE();
 let devMode = false;
 let useBoulderPng = false;
-const boulderImg = new Image();
-boulderImg.src = 'boulder.png';
+
+// Boulder skin catalog — order = prestige unlock order
+const BOULDER_SKINS = [
+  { id: 'boulder',     name: 'Stone',         file: 'boulder.png' },
+  { id: 'football',    name: 'Football',       file: 'skins/31867-2-football-ball.png' },
+  { id: 'billiard',    name: '8-Ball',         file: 'skins/billiardball.png' },
+  { id: 'cookie',      name: 'Cookie',         file: 'skins/cookie.png' },
+  { id: 'beachball2',  name: 'Beach Ball',     file: 'skins/beachball2.png' },
+  { id: 'discoball2',  name: 'Disco Ball',     file: 'skins/discoball2.png' },
+  { id: 'exerciseball', name: 'Fitness Ball',  file: 'skins/exerciseball.png' },
+  { id: 'eye',         name: 'Eyeball',        file: 'skins/eye.png' },
+  { id: 'eyeofsauron', name: 'Eye of Sauron',  file: 'skins/eyeofsauron.png' },
+  { id: 'cabbage',     name: 'Cabbage',        file: 'skins/cabbage.png' },
+  { id: 'globe',       name: 'Globe',          file: 'skins/globe.png' },
+  { id: 'yarn',        name: 'Yarn',           file: 'skins/yarn.png' },
+];
+
+// Preload all skin images
+const skinImages = {};
+for (const skin of BOULDER_SKINS) {
+  const img = new Image();
+  img.src = skin.file;
+  skinImages[skin.id] = img;
+}
+
+const boulderImg = skinImages['boulder'];
 let devSequence = [];
 const DEV_CODE = ['ArrowUp','ArrowDown','ArrowRight','ArrowLeft','ArrowUp'];
 
@@ -828,6 +920,14 @@ function doPrestige() {
   gs.meters = 0;
   gs.upgrades = {};
   gs.firstPrestigeDone = true;
+  // Award a random new skin (if any left to unlock)
+  const locked = BOULDER_SKINS.filter(s => !gs.unlockedSkins.includes(s.id));
+  if (locked.length > 0) {
+    const pick = locked[Math.floor(Math.random() * locked.length)];
+    gs.unlockedSkins.push(pick.id);
+    gs.activeSkin = pick.id;
+    showToast(`New boulder: ${pick.name}!`);
+  }
   showToast(`Fate Point earned \u2014 ${(1 + gs.fatePoints * 0.25).toFixed(2)}x`);
   renderAll();
 }
@@ -851,6 +951,8 @@ function loadGame() {
       gs = { ...def, ...data };
       if (!gs.habits || gs.habits.length < 3) gs.habits = def.habits;
       gs.habits = gs.habits.map((h, i) => ({ ...def.habits[i], ...h }));
+      if (!gs.unlockedSkins) gs.unlockedSkins = ['boulder'];
+      if (!gs.activeSkin) gs.activeSkin = 'boulder';
       const elapsed = (Date.now() - (gs.lastOnline || Date.now())) / 1000;
       if (elapsed > 60) {
         const capped = Math.min(elapsed, 8 * 3600);
@@ -1012,7 +1114,31 @@ function fmtTime(ms) {
   return `${s}s`;
 }
 
-function renderAll() { renderUpgrades(); renderPrestige(); renderMilestones(); renderHabits(); }
+function renderSkins() {
+  const section = document.getElementById('skins-section');
+  if (gs.firstPrestigeDone || devMode) section.classList.add('show');
+  else { section.classList.remove('show'); return; }
+  const grid = document.getElementById('skins-grid');
+  grid.innerHTML = '';
+  for (const skin of BOULDER_SKINS) {
+    const owned = gs.unlockedSkins.includes(skin.id) || devMode;
+    const active = gs.activeSkin === skin.id;
+    const card = document.createElement('div');
+    card.className = 'skin-card' + (active ? ' active' : '') + (!owned ? ' locked' : '');
+    card.innerHTML = owned
+      ? `<img src="${skin.file}" alt="${skin.name}"><span class="skin-label">${skin.name}</span>`
+      : `<span class="skin-label">???</span>`;
+    if (owned) card.addEventListener('click', () => { gs.activeSkin = skin.id; renderSkins(); });
+    grid.appendChild(card);
+  }
+}
+
+// Skins section collapse toggle
+document.getElementById('skins-toggle').addEventListener('click', () => {
+  document.getElementById('skins-grid').classList.toggle('expanded');
+});
+
+function renderAll() { renderUpgrades(); renderPrestige(); renderSkins(); renderMilestones(); renderHabits(); }
 
 // ============================================
 // TOASTS & MODALS
@@ -1031,7 +1157,7 @@ function showPrestigeModal() {
   o.className = 'modal-overlay';
   o.innerHTML = `<div class="modal">
     <h2>The Boulder Falls</h2>
-    <p>The boulder rolls back. All upgrades reset.<br>But something remains.<br><br>+1 Fate Point (+25% to all production, permanent)<br><small style="color:#777">Next prestige will cost ${fmt(50000 * Math.pow(3, gs.prestigeCount + 1))}m</small></p>
+    <p>The boulder rolls back. All upgrades reset.<br>But something remains.<br><br>+1 Fate Point (+25% to all production, permanent)${BOULDER_SKINS.filter(s => !gs.unlockedSkins.includes(s.id)).length > 0 ? '<br>+ A new boulder skin' : ''}<br><small style="color:#777">Next prestige will cost ${fmt(50000 * Math.pow(3, gs.prestigeCount + 1))}m</small></p>
     <div class="modal-buttons">
       <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Not Yet</button>
       <button class="modal-btn" id="confirm-prestige">Let It Fall</button>
@@ -1684,9 +1810,10 @@ function drawScene(dt) {
   ctx.scale(pulseScale, pulseScale);
   ctx.rotate(boulderRotation);
 
-  if ((useBoulderPng || gs.firstPrestigeDone) && boulderImg.complete && boulderImg.naturalWidth > 0) {
-    // Draw the PNG boulder image
-    ctx.drawImage(boulderImg, -BOULDER_R, -BOULDER_R, BOULDER_R * 2, BOULDER_R * 2);
+  const activeImg = skinImages[gs.activeSkin] || boulderImg;
+  if (activeImg.complete && activeImg.naturalWidth > 0) {
+    // Draw the active boulder skin
+    ctx.drawImage(activeImg, -BOULDER_R, -BOULDER_R, BOULDER_R * 2, BOULDER_R * 2);
   } else {
     // Boulder body
     const bGrad = ctx.createRadialGradient(-BOULDER_R * 0.2, -BOULDER_R * 0.2, BOULDER_R * 0.05, 0, 0, BOULDER_R);
